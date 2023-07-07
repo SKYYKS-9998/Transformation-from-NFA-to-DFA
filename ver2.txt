@@ -1,0 +1,317 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <string>
+#include <iomanip>
+using namespace std;
+
+/*
+addFromNFA添加初态，逐次态判断。
+次态为新态，addrow加新行，然行checknewrow检查，addrow{check}
+*/
+
+typedef struct
+{
+    char state;
+    vector<string> move;
+}NFAmove;
+
+typedef struct
+{
+    string state;
+    vector<string> move;
+}DFAmove;
+
+bool NFAcmp(NFAmove a, NFAmove b);
+bool DFAcmp(DFAmove a, DFAmove b);
+
+class NFAtable
+{
+    public:
+        NFAtable();
+        NFAtable(const char* s, const char* in, int sNo, int iNo);
+        ~NFAtable();
+
+        int searchState(char s) const;      //返回状态的序号
+        void sortTable();
+        void inputMove();
+        void outputTable() const;
+
+    private:
+
+    public:
+        vector<char> input;
+        vector<NFAmove> table;
+        int stateNo;
+        int inputNo;
+};
+
+NFAtable::NFAtable()
+    : stateNo(0)
+    , inputNo(0)
+{
+    input.clear();
+    table.clear();
+};
+
+NFAtable::NFAtable(const char* s, const char* in, int sNo, int iNo)
+    : stateNo(sNo)
+    , inputNo(iNo)
+{
+    NFAmove m;
+    m.move.clear();
+    input.clear();
+    table.clear();
+    for (int i = 0; i < stateNo; i++)
+    {
+        input.push_back(in[i]);
+        m.state = s[i];
+        table.push_back(m);
+    }
+}
+
+NFAtable::~NFAtable()
+{};
+
+void NFAtable::sortTable()
+{
+    sort(table.begin(), table.end(), NFAcmp);
+}
+
+int NFAtable::searchState(char s) const
+{
+    int found = -1;
+
+    for (int i = 0; i < stateNo && found == -1; i++)
+    {
+        if (s == table[i].state)
+            found = i;
+    } 
+
+    return found;
+}
+
+void NFAtable::inputMove()
+{
+    string m;
+    for (int i = 0; i < stateNo; i++)
+    {
+        for(int j = 0; j < inputNo; j++)
+        {
+            cout << "状态" << table[i].state << "输入" << input[j] << ':' << endl;
+            getline(cin, m);
+            sort (m.begin(), m.end());
+            table[i].move.push_back(m); 
+        }
+    }
+    sortTable();
+}
+
+void NFAtable::outputTable() const
+{
+    int i, j;
+
+    cout << setw(10) << ' ';
+    for (i = 0; i < inputNo; i++)
+    {
+        cout << right << setw(10) << input[i]; 
+    }
+    cout << endl;
+
+    for (i = 0; i < stateNo; i++)
+    {
+        cout << left << setw(10) << ((table[i].state == '\0') ? 'e' : table[i].state);
+        for (j = 0; j < inputNo; j++)
+        {
+            cout << right << setw(10) << ((table[i].move[j].empty()) ? "e" : table[i].move[j]);
+        }
+        cout << endl;
+    }
+}
+
+class DFAtable
+{
+    public:
+        DFAtable();
+        ~DFAtable();
+
+        int searchState(const string& s) const;                 //逐行检查NFA，有新子集则用add
+        void outputTable() const;
+        void addFromNFA(const NFAtable& nfa);
+    private:
+        void addState(const string& s, const NFAtable& nfa);   //新子集逐字符从NFA中得到序号，得到行
+        void sortTable();                                       //在add最后，排序行
+        void checkNewState(int s, const NFAtable& nfa);
+
+    public:
+        vector<char> input;
+        vector<DFAmove> table;
+        int stateNo;
+        int inputNo;
+};
+
+DFAtable::DFAtable()
+    : stateNo(0)
+    , inputNo(0)
+{
+    input.clear();
+    table.clear();
+};
+
+DFAtable::~DFAtable()
+{};
+
+void DFAtable::addFromNFA(const NFAtable& nfa)
+{
+    input = nfa.input;
+    inputNo = nfa.inputNo;
+    stateNo = 1;
+
+    DFAmove m;
+    string s(1, nfa.table[0].state);
+    vector<string> n(nfa.table[0].move);
+    m.move = n;
+    m.state = s;
+    table.push_back(m);
+
+    for (int i = 0; i < inputNo; i++)
+    {
+        if (searchState(table[0].move[i]) == -1)
+                addState(table[0].move[i], nfa);
+    }
+
+    sortTable();
+}
+
+int DFAtable::searchState(const string& s) const
+{
+    int found = -1;
+
+    for (int i = 0; i != table.size() && found == -1; i++)
+    {
+        if (!s.compare(table[i].state))
+            found = i;
+    }
+
+    return found;
+}
+
+void DFAtable::addState(const string& s, const NFAtable& nfa)
+{
+    int len = s.length();
+    DFAmove newRow;
+
+    newRow.state = s;
+    stateNo++;
+
+    for (int i = 0; i < inputNo; i++)
+    {
+        string next;
+        for (int j = 0; j < len; j++)
+        {
+            char st(s[j]);
+            int row = nfa.searchState(st);
+            string singleStateNext(nfa.table[row].move[i]);
+            for (int k = 0; k < singleStateNext.length(); k++)
+            {
+                if (next.find(singleStateNext[k]) == -1)
+                    next.push_back(singleStateNext[k]);
+                else if (next.find(singleStateNext) != -1)
+                    break;
+            }
+        }
+        sort(next.begin(), next.end());
+        newRow.move.push_back(next);
+    }
+
+    table.push_back(newRow);
+    checkNewState(stateNo - 1, nfa);
+}
+
+void DFAtable::checkNewState(int s, const NFAtable& nfa)
+{
+    for (int i = 0; i < inputNo; i++)
+    {
+        if (searchState(table[s].move[i]) == -1)
+                addState(table[s].move[i], nfa);
+    }
+}
+
+void DFAtable::sortTable()
+{
+    sort(table.begin(), table.end(), DFAcmp);
+}
+
+void DFAtable::outputTable() const
+{
+    int i, j;
+
+    cout << setw(10) << ' ';
+    for (i = 0; i < inputNo; i++)
+    {
+        cout << right << setw(10) << input[i]; 
+    }
+    cout << endl;
+
+    for (i = 0; i < stateNo; i++)
+    {
+        cout << left << setw(10) << ((table[i].state.empty()) ? "e" : table[i].state);
+        for (j = 0; j < inputNo; j++)
+        {
+            cout << right << setw(10) << ((table[i].move[j].empty()) ? "e" : table[i].move[j]);
+        }
+        cout << endl;
+    }
+}
+
+int main(void)
+{
+    NFAtable nfa;
+    DFAtable dfa;
+    string state, input;
+
+    cout << "请输入状态集" << endl;
+    cin >> state;
+    cout << "请输入输入集" << endl;
+    cin >> input;
+    getchar();
+
+    nfa = NFAtable(state.c_str(), input.c_str(), state.length(), input.length());
+    cout << "请逐行逐列输入NFA状态转移表格" << endl;
+    nfa.inputMove();
+    cout << "输出NFA" << endl;
+    nfa.outputTable();
+
+    cout << endl << endl << "进行转换" << endl;
+    dfa.addFromNFA(nfa);
+    cout << "输出DFA" << endl;
+    dfa.outputTable();
+
+    system("pause");
+    return 0;
+}
+
+bool NFAcmp(NFAmove a, NFAmove b)
+{
+    return a.state < b.state;
+}
+
+bool DFAcmp(DFAmove a, DFAmove b)
+{
+    int lenFlag = a.state.length() < b.state.length();
+    int lenEq = a.state.length() == b.state.length();
+
+    if (lenFlag)
+        return true;
+    else if (lenEq)
+    {
+        int flag = a.state.compare(b.state);
+    
+        if (flag > 0)
+            return false;
+        else if (flag <= 0)
+            return true;
+    }
+    
+    return false;
+}
